@@ -1,0 +1,48 @@
+# ============================================================================
+# .gitignore —— 本文件本身要提交；.env.example 模板也要提交（它只放占位符）
+# ============================================================================
+
+# ---- 密钥与本地配置 ----
+.env
+.env.local
+*.env.bak
+server.env
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- 编辑器 / 操作系统垃圾 ----
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# ---- 临时与备份文件 ----
+# 历史上曾误提交过 *.vbak / *.ipbak，这里统一堵住
+*.bak
+*.bak.*
+*.orig
+*.vbak
+*.ipbak
+*.rej
+*.tmp
+*.log
+dist_selfcheck/
+
+# ---- 离线包产物 ----
+# 由 deploy/package.py 生成；不入 git（发布物通过 tag + 校验文件表达）
+dist/
+*.tar.gz
+*.tar.gz.sha256
+
+# 第三方安全审计报告（含真实资产与密钥位置描述，只留本地，不入库）
+audit/

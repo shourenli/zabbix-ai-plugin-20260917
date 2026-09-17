@@ -1,0 +1,26 @@
+# nginx 同源路径代理示例（片段，需要复制修改，不能直接当配置文件用）
+#
+# 用法：把下面 location ^~ /ai/ 这一段，合并进你【现有的 Zabbix server 块】里。
+# 不要新建 server 块，否则 server_name / listen 会和 Zabbix 站点冲突。
+#
+# 两个关键点：
+# 1) 必须用 ^~ ：Zabbix 官方 nginx 配置里有
+#       location ~ /(api\/|conf[^\.]|include|locale) { deny all; return 404; }
+#    我们的接口形如 /ai/api/health，含 "api/"，会被上面那条正则命中而返回 404。
+#    用 ^~ 前缀匹配后 nginx 会跳过正则检查。
+# 2) proxy_pass 结尾的 / 不能少：它负责去掉 /ai 前缀再转发给 FastAPI。
+#
+# 注意：/ai/ 必须加在【提供 Zabbix 前端】的那个 server 块里（例如 listen 801）。
+# 同源（同域名同端口）才能让浏览器自动携带 zbx_session cookie。
+
+    # AI 对话框插件 -> FastAPI (uvicorn 监听 10801)
+    location ^~ /ai/ {
+        proxy_pass              http://127.0.0.1:10801/;
+        proxy_http_version      1.1;
+        proxy_set_header        Host              $host;
+        proxy_set_header        X-Real-IP         $remote_addr;
+        proxy_set_header        X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Proto $scheme;
+        proxy_buffering         off;
+        proxy_read_timeout      300s;
+    }

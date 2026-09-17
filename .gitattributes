@@ -1,0 +1,15 @@
+# 目标环境是 Linux，而开发机是 Windows（core.autocrlf=true）。
+# 如果 .sh / .py 在检出时被转成 CRLF，打进离线包后在 Linux 上会报
+#   bash: deploy/preflight.sh: /bin/bash^M: bad interpreter
+#   : command not found
+# 因此这里把文本文件一律钉死为 LF；二进制类型显式排除，避免被当文本改写。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.gz binary
+*.tar binary
+*.zip binary
+*.woff binary
+*.woff2 binary

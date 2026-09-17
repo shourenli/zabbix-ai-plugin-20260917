@@ -1,0 +1,98 @@
+# Zabbix AI 对话框插件 - 配置
+# 密钥类信息（api_key / 数据库密码 / access_token）通过环境变量注入，不入此文件、不入 git。
+
+# ---- Zabbix 连接 ----
+zabbix:
+  # 前端入口地址（用于构建同源 /ai/ 路径提示，仅展示用）
+  frontend_url: "https://zabbix.example.com"
+  # JSON-RPC API 地址
+  api_url: "https://zabbix.example.com/api_jsonrpc.php"
+  # 鉴权模式：
+  #   user    - 透传登录用户会话（默认，推荐，天然按用户权限隔离）
+  #   service - 服务端固定只读账号（权限隔离较弱）
+  auth:
+    mode: "user"
+
+# ---- LLM 后端（OpenAI 兼容 /chat/completions）----
+# 当前默认：智谱官方端点 + glm-4-flash（实测 Function Calling 正常）
+# 切换后端只需改 base_url / model / api_key_env，代码无需改动：
+#   智谱 GLM:   https://open.bigmodel.cn/api/paas/v4
+#   硅基流动:   https://api.siliconflow.cn/v1
+#   DeepSeek:   https://api.deepseek.com/v1     model: deepseek-chat
+llm:
+  base_url: "https://open.bigmodel.cn/api/paas/v4"
+  model: "glm-4-flash"
+  api_key_env: "LLM_API_KEY"   # 从该环境变量读取 API key
+  # 工具选择需要确定性，温度取低值
+  temperature: 0.3
+  top_p: 0.9
+  max_tokens: 1024
+  # 必须保持 true；置 false 时请求里完全不发 tools，5 个工具全部不可用
+  # （代码里没有"提示词式解析"的兜底路径，详见 README 第 5.1 与第 10 节）
+  function_calling: true
+  # 透传给后端的额外参数（按后端支持情况填写）
+  extra_params: {}
+
+# ---- 钉钉消息模板 ----
+# 发送到供应商群的消息正文格式。可用占位符：
+#   {username}  发送人（Zabbix 登录名）
+#   {message}   消息正文
+# 下面的写法是默认值。想改前缀/去掉发送人，改这里即可（改完重启服务）。
+#   例：不要发送人        -> "{message}"
+#   例：换个前缀          -> "【监控告警】{username} 反馈：\n{message}"
+# 也可在某个供应商下单独写 message_template 覆盖此处（见下方示例）。
+dingtalk:
+  message_template: "[zabbix-AI] {username} 上报：\n{message}"
+
+# ---- 供应商注册表（钉钉群机器人 webhook 白名单）----
+# 只有出现在这里的供应商名，才允许通过 /供应商名 发送到其钉钉群。
+# 钉钉机器人后台的"安全设置"有三种，按你实际选的填：
+#   - 自定义关键词（推荐，最简单）：填 keyword，代码会确保消息包含该词，
+#                                  否则钉钉会返回 errcode 310000
+#   - 加签：填 secret_env（存放密钥的环境变量名），代码自动追加 timestamp + sign
+#   - IP 白名单：无需额外配置
+# token 与 secret 一律用环境变量引用，避免明文入库入 git。
+suppliers:
+  网络供应商A:
+    webhook: "https://oapi.dingtalk.com/robot/send?access_token=${DINGTALK_NETWORK_A}"
+    # 关键词模式下改成与你机器人后台一致的关键词
+    keyword: "告警"
+    # 加签模式下把密钥放进环境变量，这里填变量名（可与 keyword 并存）
+    # secret_env: "DINGTALK_NETWORK_A_SECRET"
+    # 可选：该供应商单独使用不同的消息模板
+    # message_template: "【来自监控】{message}"
+  机房供应商B:
+    webhook: "https://oapi.dingtalk.com/robot/send?access_token=${DINGTALK_IDC_B}"
+    keyword: "告警"
+    # secret_env: "DINGTALK_IDC_B_SECRET"
+
+# ---- 服务 ----
+server:
+  host: "127.0.0.1"
+  # 端口 10801（zabbix 前端为 801，避免与 8080 冲突）
+  port: 10801
+  # 同源路径前缀，nginx 反代为 /ai/，与 zabbix 同域名，保证 cookie 随请求携带
+  base_path: "/ai"
+
+# ---- 对话历史 ----
+# 对话绑定「Zabbix 登录会话」：换一次登录（含注销后重登）= 全新对话，
+# 不会再看到上一轮的记录；同一账号开两个浏览器也各自独立。
+# 另外，最后一条消息距今超过 ttl_minutes 时，下一次提问会自动开始新会话。
+history:
+  ttl_minutes: 15          # 闲置多久算新会话；0 = 不自动清空
+  max_messages: 50         # 送入模型的历史条数上限
+  retention_days: 7        # 兜底清理：启动时删除超过这么久的历史记录；0 = 不清理
+
+# ---- 存储：MySQL 8.0 ----
+# 库需预先创建，见 deploy/schema.sql；密码走环境变量 MYSQL_PASSWORD
+storage:
+  mysql:
+    host: "127.0.0.1"
+    port: 3306
+    database: "zabbix_ai_plugin"
+    user: "zabbix_ai"
+    password_env: "MYSQL_PASSWORD"
+    charset: "utf8mb4"
+    # true  = 应用启动时自动建表（账号需 CREATE 权限，最省事，推荐）
+    # false = 表由 DBA 按 deploy/schema.sql 预建，应用账号只给 DML 权限
+    auto_init: true
